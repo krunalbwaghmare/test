@@ -1,0 +1,66 @@
+name: Auto Pull-Request Creator
+on:
+  workflow_dispatch:
+    inputs:
+      source_branch:
+        description: 'Select Source Branch'
+        required: true
+        default: 'DEV'
+        type: choice
+        options:
+        - DEV
+        - QA
+        - integration
+        - staging
+        - production
+
+      destination_branch:
+        description: 'Select Destination Branch'
+        required: true
+        default: 'QA'
+        type: choice
+        options:
+        - DEV
+        - QA
+        - integration
+        - staging
+        - production
+
+jobs:
+  pull-request:
+    runs-on: ubuntu-latest
+    if: |
+      (github.event.inputs.source_branch == 'DEV' && github.event.inputs.destination_branch == 'QA') ||
+      (github.event.inputs.source_branch == 'QA' && github.event.inputs.destination_branch == 'integration') ||
+      (github.event.inputs.source_branch == 'DEV' && github.event.inputs.destination_branch == 'integration') ||
+      (github.event.inputs.source_branch == 'QA' && github.event.inputs.destination_branch == 'staging') ||
+      (github.event.inputs.source_branch == 'integration' && github.event.inputs.destination_branch == 'staging') ||
+      (github.event.inputs.source_branch == 'staging' && github.event.inputs.destination_branch == 'production')
+    steps:
+    - uses: actions/checkout@v3
+    - name: Generate diff
+      id: diff
+      run: |
+        git fetch origin ${{ github.event.inputs.destination_branch }}
+        git diff --name-only origin/${{ github.event.inputs.destination_branch }}..${{ github.event.inputs.source_branch }} > changes.txt
+    - name: Read diff
+      id: read-diff
+      run: |
+        echo "::set-output name=diff::$(cat changes.txt)"
+    - name: pull-request
+      uses: diillson/auto-pull-request@latest
+      with:
+        source_branch: ${{ github.event.inputs.source_branch }}
+        destination_branch: ${{ github.event.inputs.destination_branch }}
+        pr_title: "Merge ${{ github.event.inputs.source_branch }} into ${{ github.event.inputs.destination_branch }}"
+        pr_body: |
+          :crown: *An automated PR*
+
+          _Created by [repo-sync/pull-request](https://github.com/repo-sync/pull-request)_
+
+          **Changes:**
+          ${{ steps.read-diff.outputs.diff }}
+        #pr_reviewer: "pradeepkr-consecure,niknikhil025,rajubish,SAnirudhanSekar,AniGunner"
+        pr_reviewer: "rajubish"
+        pr_assignee: "raman5535,akshatas123"
+        github_token: ${{ secrets.TOKEN }}
